@@ -17,13 +17,14 @@ void sig_handler(int signum)
 
 int main() {
     char ip[] = "0.0.0.0";
-    int port = 7991, tn = 8;
+    int port = 7999, tn = 8;
 
     printf("pid: %d\n", getpid());
 
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
     signal(SIGKILL, sig_handler);
+    signal(SIGPIPE, SIG_IGN);
 
     server = new_http_server(ip, port, tn);
     run_http_server_t(server);

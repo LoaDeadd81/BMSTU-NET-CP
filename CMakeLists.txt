@@ -16,3 +16,7 @@ add_executable(BMSTU_NET_CP main.c
         tpool/tpool_err.h
         http/http_err.h
 )
+
+add_executable(client
+        client.c
+)

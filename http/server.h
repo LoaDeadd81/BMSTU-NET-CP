@@ -3,11 +3,16 @@
 
 #include "../tpool/tpool.h"
 
+#include <poll.h>
+
 #define HOST_SIZE 16
 
 typedef struct http_server_t {
     char host[HOST_SIZE];
     int port;
+
+    struct pollfd *clients;
+    long cl_num;
 
     int listen_sock;
     tpool_t *pool;

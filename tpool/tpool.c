@@ -1,8 +1,12 @@
+#define _GNU_SOURCE
+
 #include "tpool.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <errno.h>
 
 #include "tpool_err.h"
 
@@ -81,12 +85,22 @@ int stop(tpool_t *pool) {
     pthread_mutex_unlock(pool->q_mutex);
     printf("stop: broadcasted\n");
 
+    struct timespec timeout;
+    clock_gettime(CLOCK_REALTIME, &timeout);
+
     for (int i = 0; i < pool->t_sz; ++i) {
         printf("stop: try join %d = %lu\n", i, pool->th[i]);
         if (pool->th[i] != 0) {
             pthread_cond_broadcast(pool->q_cond);
-            pthread_join(pool->th[i], NULL);
-            printf("stop: pthread joined %d = %lu\n", i, pool->th[i]);
+
+//            pthread_join(pool->th[i], NULL);
+            clock_gettime(CLOCK_REALTIME, &timeout);
+            timeout.tv_sec += 5;
+            int rc = pthread_timedjoin_np(pool->th[i], NULL, &timeout);
+            if (rc == ETIMEDOUT) {
+                pthread_cancel(pool->th[i]);
+                printf("stop: pthread canceled %d = %lu\n", i, pool->th[i]);
+            } else printf("stop: pthread joined %d = %lu\n", i, pool->th[i]);
         }
     }
     printf("stop: all joined\n");
