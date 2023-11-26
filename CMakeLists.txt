@@ -13,8 +13,12 @@ add_executable(BMSTU_NET_CP main.c
         tpool/queue.c
         tpool/queue.h
         tpool/task.h
-        tpool/tpool_err.h
-        http/http_err.h
+        http/request.c
+        http/request.h
+        http/responses_str.h
+        http/content_type.h
+        http/log.c
+        http/log.h
 )
 
 add_executable(client

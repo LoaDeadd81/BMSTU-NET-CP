@@ -10,6 +10,7 @@ typedef struct q_node_t {
 
 typedef struct queue_t {
     q_node_t *front, *back;
+    int len;
 } queue_t;
 
 queue_t *new_queue_t();
