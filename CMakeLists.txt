@@ -3,6 +3,8 @@ project(BMSTU_NET_CP C)
 
 set(CMAKE_C_STANDARD 11)
 
+set(CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread -fPIE -pie -g")
+
 add_executable(BMSTU_NET_CP main.c
         http/server.c
         http/server.h
@@ -19,6 +21,7 @@ add_executable(BMSTU_NET_CP main.c
         http/content_type.h
         http/log.c
         http/log.h
+        http/content_type.c
 )
 
 add_executable(client

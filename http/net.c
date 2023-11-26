@@ -1,3 +1,6 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
 #include "net.h"
 
 #include <sys/socket.h>
@@ -42,8 +45,10 @@ int close_net(int conn) {
 }
 
 int write_net(int fd, const void *buf, size_t n) {
+    log_debug(thread_name, "before write to fd = %d", fd);
     int byte_write = write(fd, buf, n);
-    if (byte_write < 0) log_error("server", ERR_FSTR, "write error", strerror(errno));
+    if (byte_write < 0) log_error(thread_name, ERR_FSTR, "write error", strerror(errno));
+    log_debug(thread_name, "after write to fd = %d", fd);
     return byte_write;
 }
 

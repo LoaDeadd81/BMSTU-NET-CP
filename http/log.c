@@ -1,3 +1,6 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
 #include "log.h"
 
 #include <pthread.h>
@@ -8,7 +11,7 @@
 
 #define STDOUT_FD 1
 
-thread_local const char *thread_name = "name not init";
+thread_local const char *thread_name = "main";
 
 const char *log_level_str[] = {"FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE"};
 
@@ -111,17 +114,21 @@ void log_fatal(const char *name, const char *fstr, ...) {
 }
 
 void print(const char *name, const char *fstr, log_level_t level, va_list argptr) {
+//    pthread_mutex_lock(logger.mutex);
     if (print_file(name, fstr, level, argptr) < 0) print_stdout(name, fstr, level, argptr);
+//    pthread_mutex_unlock(logger.mutex);
 }
 
 int print_file(const char *name, const char *fstr, log_level_t level, va_list argptr) {
+
     time_t t = time(NULL);;
-    struct tm *local = localtime(&t);
+    struct tm local;
+    localtime_r(&t, &local);
 
     int rc = 0;
     pthread_mutex_lock(logger.mutex);
-    if (dprintf(logger.fd, "[%02d/%02d/%dT%02d:%02d:%02d] --- [%s] --- [%s] --- ", local->tm_mday, local->tm_mon + 1,
-                local->tm_year + 1900, local->tm_hour, local->tm_min, local->tm_sec, name,
+    if (dprintf(logger.fd, "[%02d/%02d/%dT%02d:%02d:%02d] --- [%s] --- [%s] --- ", local.tm_mday, local.tm_mon + 1,
+                local.tm_year + 1900, local.tm_hour, local.tm_min, local.tm_sec, name,
                 ltostr(level)) < 0) {
         pthread_mutex_unlock(logger.mutex);
         return -1;

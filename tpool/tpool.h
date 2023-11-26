@@ -2,6 +2,7 @@
 #define BMSTU_NET_CP_TPOOL_H
 
 #include <pthread.h>
+#include <semaphore.h>
 
 #include "task.h"
 #include "queue.h"
@@ -12,7 +13,7 @@ typedef struct tpool_t {
 
     queue_t *queue;
     pthread_mutex_t *q_mutex;
-    pthread_cond_t *q_cond;
+    sem_t *sem;
 
     int stop;
     int stopped;

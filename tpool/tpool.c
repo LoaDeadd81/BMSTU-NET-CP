@@ -1,3 +1,6 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
 #define _GNU_SOURCE
 
 #include "tpool.h"
@@ -30,6 +33,7 @@ tpool_t *new_tpool_t(int thread_num) {
         free(pool);
         return NULL;
     }
+    pool->queue->len = 0;
 
     pool->th = calloc(thread_num, sizeof(pthread_t));
     if (pool->th == NULL) {
@@ -49,8 +53,8 @@ tpool_t *new_tpool_t(int thread_num) {
         return NULL;
     }
 
-    pool->q_cond = calloc(1, sizeof(pthread_cond_t));
-    if (pool->q_cond == NULL) {
+    pool->sem = calloc(1, sizeof(sem_t));
+    if (pool->sem == NULL) {
         log_fatal("tpool", ERR_FSTR, "cond var alloc failed", strerror(errno));
         free_queue_t(pool->queue);
         free(pool->th);
@@ -59,23 +63,39 @@ tpool_t *new_tpool_t(int thread_num) {
         return NULL;
     }
 
+
     pthread_mutex_init(pool->q_mutex, NULL);
-    pthread_cond_init(pool->q_cond, NULL);
+    sem_init(pool->sem, 0, 0);
 
     log_info("tpool", "tpool created");
 
     return pool;
 }
 
+routine_args_t *new_args(tpool_t *pool, int num) {
+    routine_args_t *args = calloc(1, sizeof(routine_args_t));
+    if (args == NULL) {
+        log_fatal("tpool", ERR_FSTR, "failed to alloc args", strerror(errno));
+        return NULL;
+    }
+
+    args->num = num;
+    args->pool = pool;
+
+    return args;
+}
+
 int run_tpool_t(tpool_t *pool) {
     int flag = 1, i;
 
     for (i = 0; i < pool->t_sz && flag; ++i) {
-        routine_args_t args = {
-                .pool = pool,
-                .num = i
-        };
-        if (pthread_create(&pool->th[i], NULL, routine, &args) != 0) flag = 0;
+        routine_args_t *args = new_args(pool, i);
+        if (args == NULL) {
+            flag = 0;
+            break;
+        }
+
+        if (pthread_create(&pool->th[i], NULL, routine, args) != 0) flag = 0;
     }
     if (!flag) {
         for (int j = 0; j < i; ++j) {
@@ -85,7 +105,7 @@ int run_tpool_t(tpool_t *pool) {
         return -1;
     }
 
-    log_info("tpool", "tpool started (thread num = %d)", 10);
+    log_info("tpool", "tpool started (thread num = %d)", pool->t_sz);
 
     return 0;
 }
@@ -94,19 +114,20 @@ int add_task(tpool_t *pool, task_t *task) {
     int rc = 0;
     pthread_mutex_lock(pool->q_mutex);
     rc = push(pool->queue, task);
+    log_info("tpool", "work added (q len = %d)", pool->queue->len);
+    sem_post(pool->sem);
     pthread_mutex_unlock(pool->q_mutex);
     if (rc != 0) {
         log_fatal("tpool", ERR_FSTR, "add_task error", strerror(errno));
         return rc;
     }
-    pthread_cond_signal(pool->q_cond);
     return 0;
 }
 
 int stop(tpool_t *pool) {
     pthread_mutex_lock(pool->q_mutex);
     pool->stop = 1;
-    pthread_cond_broadcast(pool->q_cond);
+    for (int i = 0; i < pool->t_sz; ++i) sem_post(pool->sem);
     pthread_mutex_unlock(pool->q_mutex);
     log_info("tpool", "stop flag is set");
 
@@ -115,7 +136,6 @@ int stop(tpool_t *pool) {
 
     for (int i = 0; i < pool->t_sz; ++i) {
         if (pool->th[i] != 0) {
-//            pthread_cond_broadcast(pool->q_cond);
             clock_gettime(CLOCK_REALTIME, &timeout);
             timeout.tv_sec += 5;
             int rc = pthread_timedjoin_np(pool->th[i], NULL, &timeout);
@@ -133,31 +153,45 @@ int stop(tpool_t *pool) {
 
 void free_tpool_t(tpool_t *pool) {
     if (pool->stopped == 0) return;
+    pthread_mutex_lock(pool->q_mutex);
     free_queue_t(pool->queue);
+    pthread_mutex_unlock(pool->q_mutex);
     free(pool->th);
+    pthread_mutex_destroy(pool->q_mutex);
     free(pool->q_mutex);
-    free(pool->q_cond);
+    sem_destroy(pool->sem);
+    free(pool->sem);
     free(pool);
+}
+
+void s_wait(sem_t *sem, pthread_mutex_t *mutex) {
+    pthread_mutex_unlock(mutex);
+    sem_wait(sem);
+    pthread_mutex_lock(mutex);
 }
 
 void *routine(void *args) {
     routine_args_t *r_args = (routine_args_t *) args;
     tpool_t *pool = r_args->pool;
-    task_t *task = NULL;
+    int num = r_args->num;
+    free(args);
 
+    task_t task;
     char name[15] = "";
-    sprintf(name, "thread-%d", r_args->num);
+    sprintf(name, "thread-%d", num);
     thread_name = name;
 
-    setbuf(stdout, NULL);
+//    setbuf(stdout, NULL);
 
-    int cnt = 0;
     while (1) {
         pthread_mutex_lock(pool->q_mutex);
-        while (empty(pool->queue) && pool->stop == 0) {
-            cnt++;
-            pthread_cond_wait(pool->q_cond, pool->q_mutex);
-        }
+
+        int val;
+        sem_getvalue(pool->sem, &val);
+        log_info(name, "sem val = %d before wait", val);
+        s_wait(pool->sem, pool->q_mutex);
+        sem_getvalue(pool->sem, &val);
+        log_info(name, "sem val = %d after wait", val);
 
         if (pool->stop == 1) {
             pthread_mutex_unlock(pool->q_mutex);
@@ -165,13 +199,18 @@ void *routine(void *args) {
             break;
         }
 
-        task = pop(pool->queue);
+        int rc = pop(pool->queue, &task);
+        if (rc != -1) {
+            log_info(name, "work taken (q len = %d)", pool->queue->len);
+        }
         pthread_mutex_unlock(pool->q_mutex);
+        if (rc < 0) continue;
+
         log_debug(name, "took the task");
 
-        task->handler(task->conn, task->wd);
-        log_debug(name, "launched task");
-        free(task);
+        log_debug(name, "starting task with conn=%d wd =%s handler=%p", task.conn, task.wd, task.handler);
+        task.handler(task.conn, task.wd);
+        log_info(name, "routine for task finished");
     }
 
     pthread_exit(NULL);
