@@ -1,13 +1,11 @@
-// This is a personal academic project. Dear PVS-Studio, please check it.
 
-// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
 #include "queue.h"
 
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
 
-#include "../http/log.h"
+#include "../log/log.h"
 
 q_node_t *new_q_node_t(task_t *task);
 
@@ -33,14 +31,14 @@ int push(queue_t *queue, task_t *task) {
 
     queue->len++;
     queue->t_push++;
-    log_info(thread_name, "task pushed to queue (len = %d, total = %d)", queue->len, queue->t_push);
+    log_info("task pushed to queue (len = %d, total = %d)", queue->len, queue->t_push);
 
     return 0;
 }
 
 int pop(queue_t *queue, task_t *task) {
     if (queue->front == NULL) {
-        log_warn(thread_name, "pop from empty queue (len = %d)", queue->len);
+        log_warn("pop from empty queue (len = %d)", queue->len);
         return -1;
     }
 
@@ -50,7 +48,7 @@ int pop(queue_t *queue, task_t *task) {
 
     queue->len--;
     queue->t_get++;
-    log_info(thread_name, "task extracted from queue (len = %d, total = %d)", queue->len, queue->t_get);
+    log_info("task extracted from queue (len = %d, total = %d)", queue->len, queue->t_get);
 
     task_t *tmp_task = extract_q_node_t(node);
     memcpy(task, tmp_task, sizeof(task_t));
@@ -76,7 +74,7 @@ void free_queue_t(queue_t *queue) {
 q_node_t *new_q_node_t(task_t *task) {
     q_node_t *node = calloc(1, sizeof(q_node_t));
     if (node == NULL) {
-        log_error("queue", ERR_FSTR, "node alloc failed", strerror(errno));
+        log_error(ERR_FSTR, "node alloc failed", strerror(errno));
         return NULL;
     }
 

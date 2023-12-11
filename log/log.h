@@ -19,16 +19,16 @@ void set_log_fd(int fd);
 
 void set_log_level(log_level_t level);
 
-void log_trace(const char *name, const char *fstr, ...);
+void log_trace(const char *fstr, ...);
 
-void log_debug(const char *name, const char *fstr, ...);
+void log_debug(const char *fstr, ...);
 
-void log_info(const char *name, const char *fstr, ...);
+void log_info(const char *fstr, ...);
 
-void log_warn(const char *name, const char *fstr, ...);
+void log_warn(const char *fstr, ...);
 
-void log_error(const char *name, const char *fstr, ...);
+void log_error(const char *fstr, ...);
 
-void log_fatal(const char *name, const char *fstr, ...);
+void log_fatal(const char *fstr, ...);
 
 #endif //BMSTU_NET_CP_LOG_H

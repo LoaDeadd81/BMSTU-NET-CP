@@ -1,13 +1,11 @@
-// This is a personal academic project. Dear PVS-Studio, please check it.
 
-// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
 #include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 
 #include "http/server.h"
-#include "http/log.h"
+#include "log/log.h"
 
 http_server_t *server = NULL;
 
@@ -25,6 +23,7 @@ void sig_handler(int signum) {
 int main() {
     char ip[] = "0.0.0.0";
     int port = 7998, tn = 8;
+    char wd[] = "./root";
 
     setbuf(stdout, NULL);
     printf("pid: %d\n", getpid());
@@ -33,11 +32,12 @@ int main() {
     signal(SIGTERM, sig_handler);
     signal(SIGKILL, sig_handler);
     signal(SIGHUP, sig_handler);
+    signal(SIGPIPE, SIG_IGN);
 
-    log_init();
-//    set_log_level(TRACE);
+    if (log_init() < 0) return -1;
 
-    server = new_http_server(ip, port, tn);
+    server = new_http_server(ip, port, tn, wd);
+    if(server == NULL) return -1;
     if (run_http_server_t(server) < 0) free_http_server_t(server);
     return 0;
 }

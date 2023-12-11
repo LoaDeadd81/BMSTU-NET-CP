@@ -20,7 +20,7 @@ typedef struct http_server_t {
     char *wd;
 } http_server_t;
 
-http_server_t *new_http_server(char *host, int port, int thread_num);
+http_server_t *new_http_server(char host[16], int port, int thread_num, char *wd);
 
 int run_http_server_t(http_server_t *server);
 

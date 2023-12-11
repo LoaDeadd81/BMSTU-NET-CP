@@ -1,6 +1,4 @@
-// This is a personal academic project. Dear PVS-Studio, please check it.
 
-// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
 #include "log.h"
 
 #include <pthread.h>
@@ -23,11 +21,11 @@ typedef struct logger_t {
 
 logger_t logger;
 
-void print(const char *name, const char *fstr, log_level_t level, va_list argptr);
+void print(const char *fstr, log_level_t level, va_list argptr);
 
-int print_file(const char *name, const char *fstr, log_level_t level, va_list argptr);
+int print_file(const char *fstr, log_level_t level, va_list argptr);
 
-void print_stdout(const char *name, const char *fstr, log_level_t level, va_list argptr);
+void print_stdout(const char *fstr, log_level_t level, va_list argptr);
 
 const char *ltostr(log_level_t);
 
@@ -37,7 +35,7 @@ int log_init() {
 
     logger.mutex = calloc(1, sizeof(pthread_mutex_t));
     if (logger.mutex == NULL) {
-        printf("logger init failed: mutex allocate failed\n");
+        printf("log init failed: mutex allocate failed\n");
         return -1;
     }
 
@@ -59,67 +57,65 @@ void set_log_level(log_level_t level) {
     logger.level = level;
 }
 
-void log_trace(const char *name, const char *fstr, ...) {
+void log_trace(const char *fstr, ...) {
     if (logger.level >= TRACE) {
         va_list argptr;
         va_start(argptr, fstr);
-        print(name, fstr, TRACE, argptr);
+        print(fstr, TRACE, argptr);
         va_end(argptr);
     }
 }
 
-void log_debug(const char *name, const char *fstr, ...) {
+void log_debug(const char *fstr, ...) {
     if (logger.level >= DEBUG) {
         va_list argptr;
         va_start(argptr, fstr);
-        print(name, fstr, DEBUG, argptr);
+        print(fstr, DEBUG, argptr);
         va_end(argptr);
     }
 }
 
-void log_info(const char *name, const char *fstr, ...) {
+void log_info(const char *fstr, ...) {
     if (logger.level >= INFO) {
         va_list argptr;
         va_start(argptr, fstr);
-        print(name, fstr, INFO, argptr);
+        print(fstr, INFO, argptr);
         va_end(argptr);
     }
 }
 
-void log_warn(const char *name, const char *fstr, ...) {
+void log_warn(const char *fstr, ...) {
     if (logger.level >= WARN) {
         va_list argptr;
         va_start(argptr, fstr);
-        print(name, fstr, WARN, argptr);
+        print(fstr, WARN, argptr);
         va_end(argptr);
     }
 }
 
-void log_error(const char *name, const char *fstr, ...) {
+void log_error(const char *fstr, ...) {
     if (logger.level >= ERROR) {
         va_list argptr;
         va_start(argptr, fstr);
-        print(name, fstr, ERROR, argptr);
+        print(fstr, ERROR, argptr);
         va_end(argptr);
     }
 }
 
-void log_fatal(const char *name, const char *fstr, ...) {
+void log_fatal(const char *fstr, ...) {
     if (logger.level >= FATAL) {
         va_list argptr;
         va_start(argptr, fstr);
-        print(name, fstr, FATAL, argptr);
+        print(fstr, FATAL, argptr);
         va_end(argptr);
     }
 }
 
-void print(const char *name, const char *fstr, log_level_t level, va_list argptr) {
-//    pthread_mutex_lock(logger.mutex);
-    if (print_file(name, fstr, level, argptr) < 0) print_stdout(name, fstr, level, argptr);
-//    pthread_mutex_unlock(logger.mutex);
+void print(const char *fstr, log_level_t level, va_list argptr) {
+    if (print_file(fstr, level, argptr) < 0) print_stdout(fstr, level, argptr);
 }
 
-int print_file(const char *name, const char *fstr, log_level_t level, va_list argptr) {
+int print_file(const char *fstr, log_level_t level, va_list argptr) {
 
     time_t t = time(NULL);;
     struct tm local;
@@ -128,7 +124,7 @@ int print_file(const char *name, const char *fstr, log_level_t level, va_list ar
     int rc = 0;
     pthread_mutex_lock(logger.mutex);
     if (dprintf(logger.fd, "[%02d/%02d/%dT%02d:%02d:%02d] --- [%s] --- [%s] --- ", local.tm_mday, local.tm_mon + 1,
-                local.tm_year + 1900, local.tm_hour, local.tm_min, local.tm_sec, name,
+                local.tm_year + 1900, local.tm_hour, local.tm_min, local.tm_sec, thread_name,
                 ltostr(level)) < 0) {
         pthread_mutex_unlock(logger.mutex);
         return -1;
@@ -143,13 +139,13 @@ int print_file(const char *name, const char *fstr, log_level_t level, va_list ar
     return rc;
 }
 
-void print_stdout(const char *name, const char *fstr, log_level_t level, va_list argptr) {
+void print_stdout(const char *fstr, log_level_t level, va_list argptr) {
     time_t t = time(NULL);
     struct tm *local = localtime(&t);
 
     pthread_mutex_lock(logger.mutex);
     printf("[%02d/%02d/%dT%02d:%02d:%02d] --- [%s] --- [%s]\t", local->tm_mday, local->tm_mon + 1,
-           local->tm_year + 1900, local->tm_hour, local->tm_min, local->tm_sec, name,
+           local->tm_year + 1900, local->tm_hour, local->tm_min, local->tm_sec, thread_name,
            ltostr(level));
     vprintf(fstr, argptr);
     pthread_mutex_unlock(logger.mutex);

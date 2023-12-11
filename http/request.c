@@ -1,12 +1,10 @@
-// This is a personal academic project. Dear PVS-Studio, please check it.
 
-// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
 #include "request.h"
 
 #include <string.h>
 #include <errno.h>
 
-#include "log.h"
+#include "../log/log.h"
 
 request_method_t parse_method(char *method);
 
@@ -17,38 +15,38 @@ int parse_req(request_t *req, char *buff) {
 
     char *http_query = strtok_r(buff, "\n", &saveptr);
     if (http_query == NULL) {
-        log_error(thread_name, ERR_FSTR, "failed parse http query string", strerror(errno));
+        log_error(ERR_FSTR, "failed parse http query string", strerror(errno));
         return -1;
     }
-    log_info(thread_name, http_query);
+    log_info(http_query);
 
     char *http_method = strtok_r(http_query, " ", &saveptr);
     if (http_method == NULL) {
-        log_error(thread_name, ERR_FSTR, "failed parse http method", strerror(errno));
+        log_error(ERR_FSTR, "failed parse http method", strerror(errno));
         return -1;
     }
     req->method = parse_method(http_method);
     if (req->method == BAD) return 0;
-    log_debug(thread_name, "method: %s - %d", http_method, req->method);
+    log_debug("method: %s - %d", http_method, req->method);
 
     char *http_url = strtok_r(NULL, " ", &saveptr);
     if (http_url == NULL) {
-        log_error(thread_name, ERR_FSTR, "failed parse url", strerror(errno));
+        log_error(ERR_FSTR, "failed parse url", strerror(errno));
         return -1;
     }
     strcpy(req->url, http_url + 1);
-    log_debug(thread_name, "url: %s ", req->url);
+    log_debug("url: %s ", req->url);
 
     char *http_version = strtok_r(NULL, "\r", &saveptr); //todo version as enum
     if (http_version == NULL) {
-        log_error(thread_name, ERR_FSTR, "failed http version", strerror(errno));
+        log_error(ERR_FSTR, "failed http version", strerror(errno));
         return -1;
     }
     if (validate_version(http_version) == 0) {
-        log_error(thread_name, "unsupported http version");
+        log_error("unsupported http version");
         return -1;
     }
-    log_debug(thread_name, "version: %s ", http_version);
+    log_debug("version: %s ", http_version);
 
     return 0;
 }

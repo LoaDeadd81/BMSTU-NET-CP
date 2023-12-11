@@ -1,6 +1,4 @@
-// This is a personal academic project. Dear PVS-Studio, please check it.
 
-// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
 #include "server.h"
 
 #include <stdlib.h>
@@ -15,7 +13,7 @@
 #include "request.h"
 #include "responses_str.h"
 #include "content_type.h"
-#include "log.h"
+#include "../log/log.h"
 
 #define PATH_MAX 256
 #define HEADER_LEN 128
@@ -45,7 +43,12 @@ char *get_type(char *path);
 
 char *get_content_type(char *path);
 
-http_server_t *new_http_server(char host[16], int port, int thread_num) {
+http_server_t *new_http_server(char host[16], int port, int thread_num, char *wd) {
+    if(chdir(wd)){
+        log_fatal(ERR_FSTR, "failed to change work dir", strerror(errno));
+        return NULL;
+    }
+
     http_server_t *server = calloc(1, sizeof(http_server_t));
     if (server == NULL) return NULL;
 
@@ -54,13 +57,13 @@ http_server_t *new_http_server(char host[16], int port, int thread_num) {
 
     server->cl_num = sysconf(_SC_OPEN_MAX);
     if (server->cl_num < 0) {
-        log_fatal("server", ERR_FSTR, "failed to get max client num", strerror(errno));
+        log_fatal(ERR_FSTR, "failed to get max client num", strerror(errno));
         free(server);
         return NULL;
     }
     server->clients = malloc(sizeof(struct pollfd) * server->cl_num);
     if (server->clients == NULL) {
-        log_fatal("server", ERR_FSTR, "failed to alloc clients fds", strerror(errno));
+        log_fatal(ERR_FSTR, "failed to alloc clients fds", strerror(errno));
         free(server);
         return NULL;
     }
@@ -75,7 +78,7 @@ http_server_t *new_http_server(char host[16], int port, int thread_num) {
 
     server->wd = calloc(PATH_MAX, sizeof(char));
     if (server->wd == NULL) {
-        log_fatal("server", ERR_FSTR, "failed to alloc wd", strerror(errno));
+        log_fatal(ERR_FSTR, "failed to alloc wd", strerror(errno));
         free_tpool_t(server->pool);
         free(server->clients);
         free(server);
@@ -83,7 +86,7 @@ http_server_t *new_http_server(char host[16], int port, int thread_num) {
     }
 
     if (getcwd(server->wd, PATH_MAX) == NULL) {
-        log_fatal("server", ERR_FSTR, "failed to get wd", strerror(errno));
+        log_fatal(ERR_FSTR, "failed to get wd", strerror(errno));
         free(server->wd);
         free_tpool_t(server->pool);
         free(server->clients);
@@ -91,8 +94,7 @@ http_server_t *new_http_server(char host[16], int port, int thread_num) {
         return NULL;
     }
 
-    log_info("server", "work dir: %s", server->wd);
-    log_info("server", "server created");
+    log_info("server created");
 
     return server;
 }
@@ -104,17 +106,17 @@ void free_http_server_t(http_server_t *server) {
     stop(server->pool);
     free_tpool_t(server->pool);
 
-    log_info("server", "server stopped");
-
     free(server->wd);
     free(server->clients);
     free(server);
+
+    log_info("server destroyed");
 }
 
 task_t *new_task_t(void (*handler)(int, char *), int conn, char *wd) {
     task_t *task = calloc(1, sizeof(task_t));
     if (task == NULL) {
-        log_error("server", ERR_FSTR, "task alloc failed", strerror(errno));
+        log_error(ERR_FSTR, "task alloc failed", strerror(errno));
         return NULL;
     }
     task->wd = wd;
@@ -124,6 +126,12 @@ task_t *new_task_t(void (*handler)(int, char *), int conn, char *wd) {
 }
 
 int run_http_server_t(http_server_t *server) {
+
+    log_info("Server starting");
+    log_info("Host: %s", server->host);
+    log_info("Port: %d", server->port);
+    log_info("Work dir: %s", server->wd);
+
     server->listen_sock = listen_net(server->host, server->port);
     if (server->listen_sock < 0) return -1;
 
@@ -136,7 +144,7 @@ int run_http_server_t(http_server_t *server) {
     while (1) {
         nready = poll(server->clients, maxi + 1, -1);
         if (nready < 0) {
-            log_fatal("server", ERR_FSTR, "poll error", strerror(errno));
+            log_fatal(ERR_FSTR, "poll error", strerror(errno));
             return -1;
         }
 
@@ -152,7 +160,7 @@ int run_http_server_t(http_server_t *server) {
                 }
             }
             if (i == server->cl_num) {
-                log_error("server", "too many connections");
+                log_error("too many connections");
                 continue;
             }
             server->clients[i].events = POLLIN;
@@ -180,45 +188,50 @@ void handle_connection(int clientfd, char *wd) {
     request_t req;
     char *buff = calloc(REQ_SIZE, sizeof(char));
     if (buff == NULL) {
-        log_error(thread_name, ERR_FSTR, "failed alloc req buf", strerror(errno));
+        log_error(ERR_FSTR, "failed alloc req buf", strerror(errno));
         return;
     }
 
-    log_debug(thread_name, "handle_connection started");
+    log_debug("handle_connection started");
     if (read_req(buff, clientfd) < 0) {
         send_err(clientfd, INT_SERVER_ERR_STR);
         close(clientfd);
+        free(buff);
         return;
     }
-    log_debug(thread_name, "read_req");
+    log_debug("read_req");
 
     if (parse_req(&req, buff) < 0) {
         send_err(clientfd, BAD_REQUEST_STR);
         close(clientfd);
+        free(buff);
         return;
     }
     if (req.method == BAD) {
-        log_error(thread_name, "unsupported http method");
+        log_error("unsupported http method");
         send_err(clientfd, M_NOT_ALLOWED_STR);
         close(clientfd);
+        free(buff);
         return;
     }
 
     process_req(clientfd, &req, wd);
 
     close(clientfd);
-    log_debug(thread_name, "handle_connection finished");
+    log_debug("handle_connection finished");
+
+    free(buff);
 }
 
 int read_req(char *buff, int clientfd) {
     long byte_read = 0, msg_size = 0;
 
-    log_debug(thread_name, "read_req in");
+    log_debug("read_req in");
     byte_read = read_net(clientfd, buff, REQ_SIZE - 1);
     if (byte_read <= 0) return -1;
     msg_size = byte_read;
     buff[msg_size - 1] = '\0';
-    log_debug(thread_name, "%s", buff);
+    log_debug("%s", buff);
 
     return 0;
 }
@@ -227,26 +240,29 @@ int read_req(char *buff, int clientfd) {
 void process_req(int clientfd, request_t *req, char *wd) {
     char *path = calloc(PATH_MAX, sizeof(char));
     if (path == NULL) {
-        log_error(thread_name, ERR_FSTR, "failed alloc path buf", strerror(errno));
+        log_error(ERR_FSTR, "failed alloc path buf", strerror(errno));
         return;
     }
 
     if (realpath(req->url, path) == NULL) {
         if (errno == ENOENT) send_err(clientfd, NOT_FOUND_STR);
         else send_err(clientfd, INT_SERVER_ERR_STR);
-        log_error(thread_name, ERR_FSTR, "realpath error", strerror(errno));
+        log_error(ERR_FSTR, "realpath error", strerror(errno));
+        free(path);
         return;
     }
 
-    log_debug(thread_name, "path: %s", path);
+    log_debug("path: %s", path);
 
     if (!is_prefix(wd, path)) {
         send_err(clientfd, FORBIDDEN_STR);
-        log_error(thread_name, "attempt to access outside the root");
+        log_error("attempt to access outside the root");
+        free(path);
         return;
     }
 
     send_resp(path, clientfd, GET);
+    free(path);
 }
 
 void send_resp(char *path, int clientfd, request_method_t type) {
@@ -258,21 +274,21 @@ void send_resp(char *path, int clientfd, request_method_t type) {
             process_head_req(path, clientfd);
             break;
         default:
-            log_error(thread_name, "unsupported http method");
+            log_error("unsupported http method");
             send_err(clientfd, M_NOT_ALLOWED_STR);
             break;
     }
 }
 
 void process_get_req(char *path, int clientfd) {
-    log_debug(thread_name, "process as GET");
+    log_debug("process as GET");
     if (send_headers(path, clientfd) < 0) return;
 
     send_file(path, clientfd);
 }
 
 void process_head_req(char *path, int clientfd) {
-    log_debug(thread_name, "process as HEAD");
+    log_debug("process as HEAD");
     send_headers(path, clientfd);
 }
 
@@ -284,13 +300,15 @@ int send_headers(char *path, int clientfd) {
     char *res_str;
 
     if (len == NULL || type == NULL) {
-        log_error(thread_name, ERR_FSTR, "failed to alloc headers buffs", strerror(errno));
+        log_error(ERR_FSTR, "failed to alloc headers buffs", strerror(errno));
         return -1;
     }
 
     struct stat st;
     if (stat(path, &st) < 0) {
         perror("stat error");
+        free(len);
+        free(type);
         return -1;
     }
     sprintf(len, "Content-Length: %ld", st.st_size);
@@ -298,40 +316,46 @@ int send_headers(char *path, int clientfd) {
 
     int rc = 0;
     if (mime_type == NULL) {
-        log_warn(thread_name, "could not determine the file type");
+        log_warn("could not determine the file type");
         rc = asprintf(&res_str, "%s\r\n%s\r\n%s\r\n\r\n", status, connection, len);
     } else {
         sprintf(type, "Content-Type: %s", mime_type);
         rc = asprintf(&res_str, "%s\r\n%s\r\n%s\r\n%s\r\n\r\n", status, connection, len, type);
     }
     if (rc < 0) {
-        log_error(thread_name, "formation of headers of http response failed");
+        log_error("formation of headers of http response failed");
+        free(len);
+        free(type);
         return -1;
     }
 
     int byte_write = write_net(clientfd, res_str, rc);
     if (byte_write < 0) {
         free(res_str);
+        free(len);
+        free(type);
         return -1;
     }
 
-    log_debug(thread_name, "headers: %s", res_str);
-    log_debug(thread_name, "send %d bytes", byte_write);
+    log_debug("headers: %s", res_str);
+    log_debug("send %d bytes", byte_write);
 
     free(res_str);
+    free(len);
+    free(type);
     return 0;
 }
 
 void send_file(char *path, int clientfd) {
     int fd = open(path, 0);
     if (fd < 0) {
-        log_error(thread_name, ERR_FSTR, "open error", strerror(errno));
+        log_error(ERR_FSTR, "open error", strerror(errno));
         return;
     }
 
     char *buff_resp = calloc(RESP_SIZE, sizeof(char));
     if (buff_resp == NULL) {
-        log_error(thread_name, ERR_FSTR, "failed alloc resp buf", strerror(errno));
+        log_error(ERR_FSTR, "failed alloc resp buf", strerror(errno));
         return;
     }
     unsigned long long total_read = 0, total_write = 0;
@@ -342,20 +366,22 @@ void send_file(char *path, int clientfd) {
 
         byte_write = write(clientfd, buff_resp, byte_read);
         if (byte_write < 0) {
-            log_error(thread_name, ERR_FSTR, "write error", strerror(errno));
+            log_error(ERR_FSTR, "write error", strerror(errno));
             break;
         }
         total_write += byte_write;
     }
-    log_debug(thread_name, "total read %llu bytes", total_read);
-    log_debug(thread_name, "total sent %llu bytes", total_write);
+    log_debug("total read %llu bytes", total_read);
+    log_debug("total sent %llu bytes", total_write);
 
     close(fd);
-    log_info(thread_name, "successful response");
+    log_info("successful response");
+
+    free(buff_resp);
 }
 
 void send_err(int clientfd, const char *str) {
-    log_info(thread_name, "%s", str);
+    log_info("%s", str);
     write_net(clientfd, str, strlen(str));
 }
 
