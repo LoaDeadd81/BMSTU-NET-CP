@@ -4,10 +4,9 @@
 #include <poll.h>
 
 typedef struct task_t {
-    void (*handler)(int, char *);
+    void (*handler)(int);
 
     int conn;
-    char* wd;
 } task_t;
 
 #endif //BMSTU_NET_CP_TASK_H

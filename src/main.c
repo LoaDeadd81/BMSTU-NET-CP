@@ -22,7 +22,7 @@ void sig_handler(int signum) {
 
 int main() {
     char ip[] = "0.0.0.0";
-    int port = 7998, tn = 8;
+    int port = 7999, tn = 8;
     char wd[] = "./root";
 
     setbuf(stdout, NULL);
@@ -35,6 +35,7 @@ int main() {
     signal(SIGPIPE, SIG_IGN);
 
     if (log_init() < 0) return -1;
+    set_log_level(INFO);
 
     server = new_http_server(ip, port, tn, wd);
     if(server == NULL) return -1;

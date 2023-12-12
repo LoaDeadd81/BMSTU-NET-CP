@@ -15,6 +15,8 @@ int listen_net(char *host, int port) {
         log_fatal(ERR_FSTR, "socket create failed", strerror(errno));
         return -1;
     }
+    int option = 1;
+    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
 
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;

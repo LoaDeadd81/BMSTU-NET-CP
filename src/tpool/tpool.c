@@ -180,10 +180,7 @@ void *routine(void *args) {
     while (1) {
         pthread_mutex_lock(pool->q_mutex);
 
-        int val;
-        sem_getvalue(pool->sem, &val);
         s_wait(pool->sem, pool->q_mutex);
-        sem_getvalue(pool->sem, &val);
 
         if (pool->stop == 1) {
             pthread_mutex_unlock(pool->q_mutex);
@@ -198,10 +195,9 @@ void *routine(void *args) {
         pthread_mutex_unlock(pool->q_mutex);
         if (rc < 0) continue;
 
-        log_debug("starting task with conn=%d wd =%s handler=%p", task.conn, task.wd, task.handler);
-        task.handler(task.conn, task.wd);
+        task.handler(task.conn);
         log_info("routine for task finished");
     }
 
-    pthread_exit(NULL);
+    return NULL;
 }
