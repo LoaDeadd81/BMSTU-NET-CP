@@ -19,7 +19,7 @@
 #define HEADER_LEN 128
 
 
-void handle_connection(int clientfd);
+void handle_connection(int clientfd, char *wd);
 
 int read_req(char *buff, int clientfd);
 
@@ -27,7 +27,7 @@ void send_resp(char *path, int clientfd, request_method_t type);
 
 void send_err(int clientfd, const char *str);
 
-void process_req(int clientfd, request_t *req);
+void process_req(int clientfd, request_t *req, char *wd);
 
 int is_prefix(char *prefix, char *str);
 
@@ -46,10 +46,6 @@ char *get_content_type(char *path);
 http_server_t *new_http_server(char *host, int port, int thread_num, char *wd) {
     if(chdir(wd)){
         log_fatal(ERR_FSTR, "failed to change work dir", strerror(errno));
-        return NULL;
-    }
-    if(chroot(".")){
-        log_fatal(ERR_FSTR, "chroot error", strerror(errno));
         return NULL;
     }
 
@@ -80,6 +76,24 @@ http_server_t *new_http_server(char *host, int port, int thread_num, char *wd) {
         return NULL;
     }
 
+    server->wd = calloc(PATH_MAX, sizeof(char));
+    if (server->wd == NULL) {
+        log_fatal(ERR_FSTR, "failed to alloc wd", strerror(errno));
+        free_tpool_t(server->pool);
+        free(server->clients);
+        free(server);
+        return NULL;
+    }
+
+    if (getcwd(server->wd, PATH_MAX) == NULL) {
+        log_fatal(ERR_FSTR, "failed to get wd", strerror(errno));
+        free(server->wd);
+        free_tpool_t(server->pool);
+        free(server->clients);
+        free(server);
+        return NULL;
+    }
+
     log_info("server created");
 
     return server;
@@ -92,32 +106,30 @@ void free_http_server_t(http_server_t *server) {
     stop(server->pool);
     free_tpool_t(server->pool);
 
+    free(server->wd);
     free(server->clients);
     free(server);
 
     log_info("server destroyed");
 }
 
-task_t *new_task_t(void (*handler)(int), int conn) {
+task_t *new_task_t(handler_t handler, int conn, char *wd) {
     task_t *task = calloc(1, sizeof(task_t));
     if (task == NULL) {
         log_error(ERR_FSTR, "task alloc failed", strerror(errno));
         return NULL;
     }
+    task->wd = wd;
     task->conn = conn;
     task->handler = handler;
     return task;
 }
 
 int run_http_server_t(http_server_t *server) {
-
-    char work_dir[PATH_MAX] = "";
-    getcwd(work_dir, PATH_MAX);
-
     log_info("Server starting");
     log_info("Host: %s", server->host);
     log_info("Port: %d", server->port);
-    log_info("Work dir: %s", work_dir);
+    log_info("Work dir: %s", server->wd);
 
     server->listen_sock = listen_net(server->host, server->port);
     if (server->listen_sock < 0) return -1;
@@ -159,7 +171,7 @@ int run_http_server_t(http_server_t *server) {
             if (server->clients[i].fd < 0) continue;
 
             if (server->clients[i].revents & (POLLIN | POLLERR)) {
-                task_t *task = new_task_t(handle_connection, server->clients[i].fd);
+                task_t *task = new_task_t(handle_connection, server->clients[i].fd, server->wd);
                 if (task == NULL) continue;
 
                 add_task(server->pool, task);
@@ -171,7 +183,7 @@ int run_http_server_t(http_server_t *server) {
     }
 }
 
-void handle_connection(int clientfd) {
+void handle_connection(int clientfd, char *wd) {
     request_t req;
     char *buff = calloc(REQ_SIZE, sizeof(char));
     if (buff == NULL) {
@@ -202,7 +214,7 @@ void handle_connection(int clientfd) {
         return;
     }
 
-    process_req(clientfd, &req);
+    process_req(clientfd, &req, wd);
 
     close(clientfd);
     log_debug("handle_connection finished");
@@ -224,11 +236,27 @@ int read_req(char *buff, int clientfd) {
 }
 
 
-void process_req(int clientfd, request_t *req) {
+void process_req(int clientfd, request_t *req, char *wd) {
     char *path = calloc(PATH_MAX, sizeof(char));
     if (path == NULL) {
         log_error(ERR_FSTR, "failed alloc path buf", strerror(errno));
         send_err(clientfd, INT_SERVER_ERR_STR);
+        return;
+    }
+
+    if (realpath(req->url, path) == NULL) {
+        if (errno == ENOENT) send_err(clientfd, NOT_FOUND_STR);
+        else send_err(clientfd, INT_SERVER_ERR_STR);
+        log_error(ERR_FSTR, "realpath error", strerror(errno));
+        free(path);
+        return;
+    }
+    log_debug("path: %s", path);
+
+    if (!is_prefix(wd, path)) {
+        send_err(clientfd, FORBIDDEN_STR);
+        log_error("attempt to access outside the root");
+        free(path);
         return;
     }
 

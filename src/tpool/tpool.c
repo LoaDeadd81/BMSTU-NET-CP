@@ -195,9 +195,9 @@ void *routine(void *args) {
         pthread_mutex_unlock(pool->q_mutex);
         if (rc < 0) continue;
 
-        task.handler(task.conn);
+        task.handler(task.conn, task.wd);
         log_info("routine for task finished");
     }
 
-    return NULL;
+    pthread_exit(NULL);
 }

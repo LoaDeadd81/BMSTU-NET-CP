@@ -3,10 +3,13 @@
 
 #include <poll.h>
 
+typedef void (*handler_t)(int, char *);
+
 typedef struct task_t {
-    void (*handler)(int);
+    handler_t handler;
 
     int conn;
+    char* wd;
 } task_t;
 
 #endif //BMSTU_NET_CP_TASK_H

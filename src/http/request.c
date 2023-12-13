@@ -34,7 +34,10 @@ int parse_req(request_t *req, char *buff) {
         log_error(ERR_FSTR, "failed parse url", strerror(errno));
         return -1;
     }
-    strcpy(req->url, http_url + 1);
+    if (strcmp(http_url, "/") == 0)
+        strcpy(req->url, "index.html");
+    else
+        strcpy(req->url, http_url + 1);
     log_debug("url: %s ", req->url);
 
     char *http_version = strtok_r(NULL, "\r", &saveptr); //todo version as enum

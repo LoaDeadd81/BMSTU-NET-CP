@@ -16,9 +16,6 @@ void sig_handler(int signum) {
 }
 
 //ab -n 10 -c 2 localhost:7999/a.txt
-//clang -g -Wall -Werror -fsanitize=thread main.c tpool/* http/*
-//TSAN_OPTIONS=detect_deadlocks=1:second_deadlock_stack=1 ./a.out
-//rm -rf tpool/*.gch http/*.gch a.out
 
 int main() {
     char ip[] = "0.0.0.0";

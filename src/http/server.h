@@ -17,6 +17,7 @@ typedef struct http_server_t {
     int listen_sock;
     tpool_t *pool;
 
+    char *wd;
 } http_server_t;
 
 http_server_t *new_http_server(char *host, int port, int thread_num, char *wd);
